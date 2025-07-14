@@ -1,0 +1,57 @@
+[package]
+name = "screen_text_monitor"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "debug"
+path = "src/main_debug.rs"
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+[[bin]]
+name = "minimal"
+path = "src/main_minimal.rs"
+
+[[bin]]
+name = "capture_test"
+path = "src/main_capture_test.rs"
+
+[[bin]]
+name = "ocr_test"
+path = "src/main_ocr_test.rs"
+
+[[bin]]
+name = "combined_test"
+path = "src/main_combined_test.rs"
+
+[[bin]]
+name = "safe"
+path = "src/main_safe.rs"
+
+[[bin]]
+name = "console"
+path = "src/main_console.rs"
+
+[dependencies]
+# 画面キャプチャ用
+screenshots = "0.8"
+# 画像処理用
+image = "0.24"
+# OCR用
+tesseract = "0.15"
+# 非同期処理用（軽量版）
+tokio = { version = "1.35", features = ["rt", "macros"] }
+# GUI用
+eframe = "0.28"
+egui = "0.28"
+# エラーハンドリング用
+anyhow = "1.0"
+# 設定管理用
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# ログ出力用
+log = "0.4"
+env_logger = "0.10"
