@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>領域選択</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: transparent; /* 完全透明な背景 */
+            cursor: crosshair;
+            overflow: hidden;
+            font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'MS Gothic', sans-serif;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0); /* 完全透明 */
+            pointer-events: none; /* クリックイベントを通す */
+        }
+        
+        .selection-box {
+            position: absolute;
+            border: 2px dashed #fff; /* 白い点線 */
+            background-color: transparent; /* 選択範囲内は透明 */
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 0 0 10000px rgba(0, 0, 0, 0.6); /* 選択範囲外を暗く */
+            /* 点線のアニメーション */
+            background-image: linear-gradient(to right, transparent 50%, rgba(255, 255, 255, 0.1) 50%),
+                              linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.1) 50%);
+            background-size: 10px 10px;
+            animation: marching-ants 1s linear infinite;
+            pointer-events: none; /* 選択ボックス自体はクリック不可 */
+        }
+        
+        @keyframes marching-ants {
+            0% {
+                background-position: 0 0, 0 0;
+            }
+            100% {
+                background-position: 10px 0, 0 10px;
+            }
+        }
+        
+        .instructions {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8); /* 暗い背景 */
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 1001;
+            text-align: center;
+            font-size: 16px;
+            color: #fff; /* 白い文字 */
+            backdrop-filter: blur(10px); /* 背景をぼかす */
+        }
+        
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8); /* 暗い背景 */
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 1001;
+            text-align: center;
+            backdrop-filter: blur(10px); /* 背景をぼかす */
+        }
+        
+        button {
+            background-color: #007AFF; /* macOS風の青色 */
+            color: white;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #0051D5; /* ホバー時の濃い青 */
+        }
+        
+        .cancel-btn {
+            background-color: #f44336;
+        }
+        
+        .cancel-btn:hover {
+            background-color: #da190b;
+        }
+        
+        .region-info {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8); /* 暗い背景 */
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 1001;
+            font-size: 14px;
+            color: #fff; /* 白い文字 */
+            display: none;
+            backdrop-filter: blur(10px); /* 背景をぼかす */
+        }
+        
+        /* サイズラベル */
+        .size-label {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 1002;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay"></div>
+    <div class="selection-box" id="selectionBox"></div>
+    <div class="size-label" id="sizeLabel"></div>
+    
+    <div class="instructions">
+        クリックしてドラッグし、監視する領域を選択してください<br>
+        <small style="opacity: 0.8; font-size: 12px;">Enterで確定 / Escでキャンセル</small>
+    </div>
+    
+    <div class="region-info" id="regionInfo"></div>
+    
+    <div class="controls">
+        <button onclick="confirmSelection()">選択を確定</button>
+        <button class="cancel-btn" onclick="cancelSelection()">キャンセル</button>
+    </div>
+
+    <script>
+        let isSelecting = false;
+        let startX, startY, endX, endY;
+        let selectionBox = document.getElementById('selectionBox');
+        let regionInfo = document.getElementById('regionInfo');
+        let sizeLabel = document.getElementById('sizeLabel');
+        let selectedRegion = null;
+        
+        // マウスイベントの設定
+        document.addEventListener('mousedown', startSelection);
+        document.addEventListener('mousemove', updateSelection);
+        document.addEventListener('mouseup', endSelection);
+        
+        function startSelection(e) {
+            if (e.target.tagName === 'BUTTON') return;
+            
+            isSelecting = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            endX = e.clientX;
+            endY = e.clientY;
+            
+            selectionBox.style.display = 'block';
+            selectionBox.style.left = startX + 'px';
+            selectionBox.style.top = startY + 'px';
+            selectionBox.style.width = '0px';
+            selectionBox.style.height = '0px';
+            
+            // サイズラベルを初期化
+            sizeLabel.style.display = 'none';
+            
+            // 選択開始時の処理（オーバーレイは透明のままにする）
+        }
+        
+        function updateSelection(e) {
+            if (!isSelecting) return;
+            
+            endX = e.clientX;
+            endY = e.clientY;
+            
+            const left = Math.min(startX, endX);
+            const top = Math.min(startY, endY);
+            const width = Math.abs(endX - startX);
+            const height = Math.abs(endY - startY);
+            
+            selectionBox.style.left = left + 'px';
+            selectionBox.style.top = top + 'px';
+            selectionBox.style.width = width + 'px';
+            selectionBox.style.height = height + 'px';
+            
+            // サイズラベルを更新して表示
+            sizeLabel.textContent = `${Math.round(width)} × ${Math.round(height)}`;
+            sizeLabel.style.display = 'block';
+            sizeLabel.style.left = (left + width + 10) + 'px';
+            sizeLabel.style.top = (top + height / 2 - 10) + 'px';
+            
+            // 選択領域の情報を更新
+            updateRegionInfo(left, top, width, height);
+        }
+        
+        function endSelection(e) {
+            if (!isSelecting) return;
+            isSelecting = false;
+            
+            const left = Math.min(startX, endX);
+            const top = Math.min(startY, endY);
+            const width = Math.abs(endX - startX);
+            const height = Math.abs(endY - startY);
+            
+            if (width > 10 && height > 10) {
+                selectedRegion = {
+                    x: Math.round(left),
+                    y: Math.round(top),
+                    width: Math.round(width),
+                    height: Math.round(height)
+                };
+                updateRegionInfo(left, top, width, height);
+            } else {
+                // 選択が小さすぎる場合は無効化
+                selectionBox.style.display = 'none';
+                regionInfo.style.display = 'none';
+                sizeLabel.style.display = 'none';
+                selectedRegion = null;
+            }
+        }
+        
+        function updateRegionInfo(x, y, width, height) {
+            regionInfo.innerHTML = `選択領域: X=${Math.round(x)}, Y=${Math.round(y)}, 幅=${Math.round(width)}, 高さ=${Math.round(height)}`;
+            regionInfo.style.display = 'block';
+        }
+        
+        // 選択を確定
+        function confirmSelection() {
+            if (!selectedRegion) {
+                alert('領域を選択してください');
+                return;
+            }
+            
+            console.log('選択結果を送信:', selectedRegion);
+            console.log('JSON化:', JSON.stringify(selectedRegion));
+            
+            // 親ウィンドウに選択結果を送信
+            if (window.__TAURI__) {
+                // オブジェクトをそのまま送信（Tauriが自動的にシリアライズ）
+                window.__TAURI__.event.emit('region-selected', selectedRegion)
+                    .then(() => {
+                        console.log('イベント送信成功');
+                        // ウィンドウを閉じる
+                        window.__TAURI__.window.getCurrent().close();
+                    })
+                    .catch(error => {
+                        console.error('イベント送信エラー:', error);
+                    });
+            }
+        }
+        
+        // キャンセル
+        function cancelSelection() {
+            console.log('キャンセル');
+            
+            // キャンセルイベントを送信
+            if (window.__TAURI__) {
+                window.__TAURI__.event.emit('region-cancelled')
+                    .then(() => {
+                        console.log('キャンセルイベント送信成功');
+                        // ウィンドウを閉じる
+                        window.__TAURI__.window.getCurrent().close();
+                    })
+                    .catch(error => {
+                        console.error('キャンセルイベント送信エラー:', error);
+                    });
+            }
+        }
+        
+        // キーボードショートカット
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                cancelSelection();
+            } else if (e.key === 'Enter' && selectedRegion) {
+                confirmSelection();
+            }
+        });
+    </script>
+</body>
+</html>

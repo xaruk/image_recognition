@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画面テキスト監視システム</title>
+    <style>
+        body {
+            font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'MS Gothic', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .section h2 {
+            color: #555;
+            margin-top: 0;
+            font-size: 20px;
+        }
+        .region-info {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .stop-btn {
+            background-color: #f44336;
+        }
+        .stop-btn:hover {
+            background-color: #da190b;
+        }
+        .text-history {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 15px;
+            background-color: white;
+            border-radius: 5px;
+        }
+        .text-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        .error {
+            color: #f44336;
+            background-color: #ffebee;
+            border-left-color: #f44336;
+        }
+        .status {
+            font-weight: bold;
+            color: #666;
+        }
+        .monitoring {
+            color: #4CAF50;
+        }
+        .stopped {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>画面テキスト監視システム</h1>
+        
+        <div class="section">
+            <h2>監視領域の設定</h2>
+            <div class="region-info" id="region-info">
+                領域が選択されていません
+            </div>
+            <button onclick="selectRegion()">領域を選択</button>
+        </div>
+        
+        <div class="section">
+            <h2>監視制御</h2>
+            <div class="status" id="status">
+                ステータス: <span class="stopped">停止中</span>
+            </div>
+            <br>
+            <button id="start-btn" onclick="startMonitoring()">監視を開始</button>
+            <button id="stop-btn" class="stop-btn" onclick="stopMonitoring()" disabled>監視を停止</button>
+        </div>
+        
+        <div class="section">
+            <h2>認識されたテキスト履歴</h2>
+            <div class="text-history" id="text-history">
+                <div class="text-item">履歴がありません</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tauri APIの読み込み確認
+        if (typeof window.__TAURI__ === 'undefined') {
+            console.error('Tauri APIが読み込まれていません');
+            alert('Tauri APIが読み込まれていません。アプリケーションを再起動してください。');
+        }
+        
+        const { invoke } = window.__TAURI__.tauri;
+        const { listen } = window.__TAURI__.event;
+        
+        let isMonitoring = false;
+        let selectedRegion = null;
+        let textHistory = [];
+        
+        // 初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            updateUI();
+            setupEventListeners();
+        });
+        
+        // イベントリスナーの設定
+        function setupEventListeners() {
+            // テキスト変更イベントのリスナー
+            listen('text-changed', (event) => {
+                const data = event.payload;
+                addToHistory(data);
+            });
+            
+            // エラーイベントのリスナー
+            listen('error', (event) => {
+                const error = event.payload;
+                addToHistory({ type: 'error', message: error });
+            });
+        }
+        
+        // 領域選択
+        async function selectRegion() {
+            console.log('selectRegion関数が呼び出されました');
+            try {
+                if (typeof invoke === 'undefined') {
+                    throw new Error('Tauri invoke関数が利用できません');
+                }
+                console.log('select_regionコマンドを呼び出しています...');
+                const region = await invoke('select_region');
+                console.log('領域選択成功:', region);
+                selectedRegion = region;
+                updateUI();
+            } catch (error) {
+                console.error('領域選択エラー:', error);
+                addToHistory({ type: 'error', message: '領域選択エラー: ' + error });
+            }
+        }
+        
+        // 監視開始
+        async function startMonitoring() {
+            console.log('startMonitoring関数が呼び出されました');
+            if (!selectedRegion) {
+                alert('先に領域を選択してください');
+                return;
+            }
+            
+            try {
+                if (typeof invoke === 'undefined') {
+                    throw new Error('Tauri invoke関数が利用できません');
+                }
+                console.log('start_monitoringコマンドを呼び出しています...', selectedRegion);
+                await invoke('start_monitoring', { region: selectedRegion });
+                console.log('監視開始成功');
+                isMonitoring = true;
+                updateUI();
+                addToHistory({ type: 'info', message: '監視を開始しました' });
+            } catch (error) {
+                console.error('監視開始エラー:', error);
+                addToHistory({ type: 'error', message: '監視開始エラー: ' + error });
+            }
+        }
+        
+        // 監視停止
+        async function stopMonitoring() {
+            console.log('stopMonitoring関数が呼び出されました');
+            try {
+                if (typeof invoke === 'undefined') {
+                    throw new Error('Tauri invoke関数が利用できません');
+                }
+                console.log('stop_monitoringコマンドを呼び出しています...');
+                await invoke('stop_monitoring');
+                console.log('監視停止成功');
+                isMonitoring = false;
+                updateUI();
+                addToHistory({ type: 'info', message: '監視を停止しました' });
+            } catch (error) {
+                console.error('監視停止エラー:', error);
+                addToHistory({ type: 'error', message: '監視停止エラー: ' + error });
+            }
+        }
+        
+        // UI更新
+        function updateUI() {
+            // 領域情報の更新
+            const regionInfo = document.getElementById('region-info');
+            if (selectedRegion) {
+                regionInfo.innerHTML = `選択領域: X=${selectedRegion.x}, Y=${selectedRegion.y}, 幅=${selectedRegion.width}, 高さ=${selectedRegion.height}`;
+            } else {
+                regionInfo.innerHTML = '領域が選択されていません';
+            }
+            
+            // ステータスの更新
+            const status = document.getElementById('status');
+            if (isMonitoring) {
+                status.innerHTML = 'ステータス: <span class="monitoring">監視中</span>';
+            } else {
+                status.innerHTML = 'ステータス: <span class="stopped">停止中</span>';
+            }
+            
+            // ボタンの状態更新
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            
+            if (isMonitoring) {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else {
+                startBtn.disabled = !selectedRegion;
+                stopBtn.disabled = true;
+            }
+        }
+        
+        // 履歴に追加
+        function addToHistory(data) {
+            textHistory.unshift(data);
+            if (textHistory.length > 50) {
+                textHistory.pop();
+            }
+            
+            const historyDiv = document.getElementById('text-history');
+            const item = document.createElement('div');
+            item.className = 'text-item';
+            
+            if (data.type === 'error') {
+                item.className += ' error';
+                item.textContent = `エラー: ${data.message}`;
+            } else if (data.type === 'new') {
+                item.textContent = `[新規] ${data.text}`;
+            } else if (data.type === 'changed') {
+                item.textContent = `[変更] ${data.old} → ${data.new}`;
+            } else if (data.type === 'cleared') {
+                item.textContent = `[クリア] ${data.text}`;
+            } else if (data.type === 'info') {
+                item.textContent = data.message;
+            }
+            
+            if (textHistory.length === 1) {
+                historyDiv.innerHTML = '';
+            }
+            historyDiv.insertBefore(item, historyDiv.firstChild);
+        }
+    </script>
+</body>
+</html>
