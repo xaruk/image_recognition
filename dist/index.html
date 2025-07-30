@@ -84,6 +84,10 @@
             border-radius: 3px;
             font-size: 14px;
         }
+        .text-item.diff {
+            border-left-color: #2196F3;
+            background-color: #e3f2fd;
+        }
         .error {
             color: #f44336;
             background-color: #ffebee;
@@ -169,6 +173,12 @@
         // 領域選択
         async function selectRegion() {
             console.log('selectRegion関数が呼び出されました');
+            
+            // 監視中の場合は停止メッセージを表示
+            if (isMonitoring) {
+                addToHistory({ type: 'info', message: '監視を停止して領域選択を開始します' });
+            }
+            
             try {
                 if (typeof invoke === 'undefined') {
                     throw new Error('Tauri invoke関数が利用できません');
@@ -177,10 +187,22 @@
                 const region = await invoke('select_region');
                 console.log('領域選択成功:', region);
                 selectedRegion = region;
+                
+                // 監視が停止された場合の状態更新
+                if (isMonitoring) {
+                    isMonitoring = false;
+                    addToHistory({ type: 'info', message: '監視が停止されました' });
+                }
+                
                 updateUI();
+                addToHistory({ type: 'info', message: '新しい領域が選択されました' });
             } catch (error) {
                 console.error('領域選択エラー:', error);
                 addToHistory({ type: 'error', message: '領域選択エラー: ' + error });
+                
+                // エラーが発生した場合も監視状態を更新
+                isMonitoring = false;
+                updateUI();
             }
         }
         
@@ -278,6 +300,15 @@
                 item.textContent = `[変更] ${data.old} → ${data.new}`;
             } else if (data.type === 'cleared') {
                 item.textContent = `[クリア] ${data.text}`;
+            } else if (data.type === 'diff') {
+                item.className += ' diff';
+                item.innerHTML = `[差分検出]<br>`;
+                if (data.added && data.added.length > 0) {
+                    item.innerHTML += `<span style="color: #4CAF50;">追加: ${data.added.join(', ')}</span><br>`;
+                }
+                if (data.removed && data.removed.length > 0) {
+                    item.innerHTML += `<span style="color: #f44336;">削除: ${data.removed.join(', ')}</span>`;
+                }
             } else if (data.type === 'info') {
                 item.textContent = data.message;
             }

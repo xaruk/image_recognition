@@ -22,23 +22,19 @@
             left: 0;
             width: 100vw;
             height: 100vh;
-            background-color: rgba(0, 0, 0, 0); /* 完全透明 */
+            background-color: rgba(0, 0, 0, 0.3); /* 半透明のダークオーバーレイ */
             pointer-events: none; /* クリックイベントを通す */
         }
         
         .selection-box {
             position: absolute;
-            border: 2px dashed #fff; /* 白い点線 */
-            background-color: transparent; /* 選択範囲内は透明 */
+            border: 3px solid #00FF00; /* 明るい緑の実線 */
+            background-color: rgba(0, 255, 0, 0.1); /* 選択範囲内は薄い緑 */
             display: none;
             z-index: 1000;
-            box-shadow: 0 0 0 10000px rgba(0, 0, 0, 0.6); /* 選択範囲外を暗く */
-            /* 点線のアニメーション */
-            background-image: linear-gradient(to right, transparent 50%, rgba(255, 255, 255, 0.1) 50%),
-                              linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.1) 50%);
-            background-size: 10px 10px;
-            animation: marching-ants 1s linear infinite;
+            box-shadow: 0 0 0 10000px rgba(0, 0, 0, 0.5); /* 選択範囲外を半透明の黒に */
             pointer-events: none; /* 選択ボックス自体はクリック不可 */
+            border-radius: 2px;
         }
         
         @keyframes marching-ants {
@@ -55,15 +51,15 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.8); /* 暗い背景 */
+            background-color: rgba(0, 0, 0, 0.7); /* 半透明の暗い背景 */
             padding: 15px 25px;
             border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             z-index: 1001;
             text-align: center;
             font-size: 16px;
             color: #fff; /* 白い文字 */
-            backdrop-filter: blur(10px); /* 背景をぼかす */
+            backdrop-filter: blur(5px); /* 軽い背景ぼかし */
         }
         
         .controls {
@@ -71,13 +67,13 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.8); /* 暗い背景 */
+            background-color: rgba(0, 0, 0, 0.7); /* 半透明の暗い背景 */
             padding: 15px 25px;
             border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             z-index: 1001;
             text-align: center;
-            backdrop-filter: blur(10px); /* 背景をぼかす */
+            backdrop-filter: blur(5px); /* 軽い背景ぼかし */
         }
         
         button {
@@ -109,21 +105,21 @@
             top: 80px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.8); /* 暗い背景 */
+            background-color: rgba(0, 0, 0, 0.7); /* 半透明の暗い背景 */
             padding: 10px 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             z-index: 1001;
             font-size: 14px;
             color: #fff; /* 白い文字 */
             display: none;
-            backdrop-filter: blur(10px); /* 背景をぼかす */
+            backdrop-filter: blur(5px); /* 軽い背景ぼかし */
         }
         
         /* サイズラベル */
         .size-label {
             position: absolute;
-            background-color: rgba(0, 0, 0, 0.8);
+            background-color: rgba(0, 0, 0, 0.7); /* 半透明の暗い背景 */
             color: #fff;
             padding: 4px 8px;
             border-radius: 4px;
@@ -132,6 +128,7 @@
             z-index: 1002;
             pointer-events: none;
             display: none;
+            backdrop-filter: blur(3px); /* 軽い背景ぼかし */
         }
     </style>
 </head>

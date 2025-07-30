@@ -44,6 +44,9 @@ enum TextChangeEvent {
     /// テキストがクリアされた
     #[serde(rename = "cleared")]
     TextCleared { text: String },
+    /// 差分テキストが検出された
+    #[serde(rename = "diff")]
+    DiffDetected { added: Vec<String>, removed: Vec<String> },
     /// 情報メッセージ
     #[serde(rename = "info")]
     Info { message: String },
@@ -52,6 +55,17 @@ enum TextChangeEvent {
 /// 領域選択のコマンド
 #[tauri::command]
 async fn select_region(state: State<'_, Mutex<AppState>>, app_handle: tauri::AppHandle) -> Result<CaptureRegion, String> {
+    // 現在監視中の場合は停止
+    {
+        let mut app_state = state.lock().map_err(|e| format!("状態ロックエラー: {}", e))?;
+        if app_state.is_monitoring {
+            // 停止シグナルを送信
+            app_state.stop_monitoring.store(true, Ordering::Relaxed);
+            app_state.is_monitoring = false;
+            info!("領域選択のために監視を停止しました");
+        }
+    }
+    
     // 領域選択用のオーバーレイウィンドウを作成
     let region = match create_region_selector(app_handle).await {
         Ok(region) => region,
@@ -80,7 +94,7 @@ async fn create_region_selector(app_handle: tauri::AppHandle) -> Result<CaptureR
     let primary_screen = screens.first()
         .ok_or_else(|| anyhow::anyhow!("プライマリスクリーンが見つかりません"))?;
     
-    // オーバーレイウィンドウを作成（透明化とフルスクリーン）
+    // オーバーレイウィンドウを作成（半透明とフルスクリーン）
     let overlay_window = WindowBuilder::new(
         &app_handle,
         "region_selector",
@@ -92,6 +106,7 @@ async fn create_region_selector(app_handle: tauri::AppHandle) -> Result<CaptureR
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true) // タスクバーに表示しない
+    .transparent(true) // ウィンドウを透明にする
     .build()
     .map_err(|e| anyhow::anyhow!("オーバーレイウィンドウの作成に失敗: {}", e))?;
     
@@ -277,6 +292,21 @@ fn start_monitoring(
                         } else {
                             // テキストが変更された
                             info!("テキストが変更されました: {} -> {}", prev_text, current_text);
+                            
+                            // 差分を検出
+                            let (added, removed) = detect_text_diff(prev_text, &current_text);
+                            
+                            // 差分がある場合は差分イベントも送信
+                            if !added.is_empty() || !removed.is_empty() {
+                                info!("差分検出 - 追加: {:?}, 削除: {:?}", added, removed);
+                                let diff_event = TextChangeEvent::DiffDetected {
+                                    added: added.clone(),
+                                    removed: removed.clone(),
+                                };
+                                let _ = window.emit("text-changed", diff_event);
+                            }
+                            
+                            // 通常の変更イベントも送信
                             let event = TextChangeEvent::TextChanged {
                                 old: prev_text.clone(),
                                 new: current_text.clone(),
@@ -313,6 +343,31 @@ fn stop_monitoring(state: State<Mutex<AppState>>) -> Result<(), String> {
     
     info!("監視停止を要求しました");
     Ok(())
+}
+
+/// テキストの差分を検出する関数
+fn detect_text_diff(old_text: &str, new_text: &str) -> (Vec<String>, Vec<String>) {
+    let old_lines: Vec<&str> = old_text.lines().collect();
+    let new_lines: Vec<&str> = new_text.lines().collect();
+    
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    
+    // 新しく追加された行を検出
+    for new_line in &new_lines {
+        if !old_lines.contains(new_line) && !new_line.trim().is_empty() {
+            added.push(new_line.to_string());
+        }
+    }
+    
+    // 削除された行を検出
+    for old_line in &old_lines {
+        if !new_lines.contains(old_line) && !old_line.trim().is_empty() {
+            removed.push(old_line.to_string());
+        }
+    }
+    
+    (added, removed)
 }
 
 fn main() {

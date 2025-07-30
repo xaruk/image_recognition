@@ -16,6 +16,8 @@ pub enum TextChangeEvent {
     TextChanged { old: String, new: String },
     /// テキストがクリアされた
     TextCleared(String),
+    /// 差分テキストが検出された（追加された部分のみ）
+    DiffDetected { added: Vec<String>, removed: Vec<String> },
     /// エラーが発生した
     Error(String),
 }
@@ -30,6 +32,8 @@ pub struct ScreenMonitor {
     last_text: Arc<RwLock<Option<String>>>,
     /// 監視間隔（ミリ秒）
     interval_ms: u64,
+    /// テキスト差分検出器
+    text_differ: TextDiffer,
 }
 
 impl ScreenMonitor {
@@ -38,12 +42,14 @@ impl ScreenMonitor {
         let capture = ScreenCapture::new(region);
         let ocr_engine = Arc::new(OcrEngine::new()?);
         let last_text = Arc::new(RwLock::new(None));
+        let text_differ = TextDiffer::new(1); // 最小1文字の変更を検出
 
         Ok(Self {
             capture,
             ocr_engine,
             last_text,
             interval_ms,
+            text_differ,
         })
     }
 
@@ -105,10 +111,25 @@ impl ScreenMonitor {
                         } else {
                             // テキストが変更された
                             log::info!("テキストが変更されました: {} -> {}", prev_text, current_text);
+                            
+                            // 差分を検出
+                            let (added, removed) = self.text_differ.detect_changes(prev_text, &current_text);
+                            
+                            // 差分がある場合は差分イベントも送信
+                            if !added.is_empty() || !removed.is_empty() {
+                                log::info!("差分検出 - 追加: {:?}, 削除: {:?}", added, removed);
+                                let _ = event_sender.send(TextChangeEvent::DiffDetected {
+                                    added: added.clone(),
+                                    removed: removed.clone(),
+                                }).await;
+                            }
+                            
+                            // 通常の変更イベントも送信
                             let _ = event_sender.send(TextChangeEvent::TextChanged {
                                 old: prev_text.clone(),
                                 new: current_text.clone(),
                             }).await;
+                            
                             *last_text = Some(current_text);
                         }
                     }
@@ -147,19 +168,27 @@ impl TextDiffer {
     }
 
     /// 2つのテキストの差分を検出
-    pub fn detect_changes(&self, old_text: &str, new_text: &str) -> Vec<String> {
+    pub fn detect_changes(&self, old_text: &str, new_text: &str) -> (Vec<String>, Vec<String>) {
         let old_lines: Vec<&str> = old_text.lines().collect();
         let new_lines: Vec<&str> = new_text.lines().collect();
 
-        let mut changes = Vec::new();
+        let mut added = Vec::new();
+        let mut removed = Vec::new();
 
         // 新しく追加された行を検出
         for new_line in &new_lines {
             if !old_lines.contains(new_line) && new_line.len() >= self.min_change_length {
-                changes.push(new_line.to_string());
+                added.push(new_line.to_string());
             }
         }
 
-        changes
+        // 削除された行を検出
+        for old_line in &old_lines {
+            if !new_lines.contains(old_line) && old_line.len() >= self.min_change_length {
+                removed.push(old_line.to_string());
+            }
+        }
+
+        (added, removed)
     }
 }
